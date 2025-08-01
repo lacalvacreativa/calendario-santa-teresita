@@ -179,10 +179,26 @@
 
             <!-- Calendar Days Grid -->
             <div id="calendar-days-grid" class="calendar-grid border-t border-l border-gray-300">
-                <!-- Calendar days will be injected here -->
+                <!-- Estado de carga inicial -->
+                <p id="loading-message" class="col-span-7 text-center py-10 text-gray-500">Cargando...</p>
             </div>
         </div>
     </main>
+    
+    <!-- Configuración del modal de error de la base de datos -->
+    <div id="db-config-modal" class="hidden form-container">
+        <div class="modal bg-white p-6 rounded-xl shadow-2xl w-full max-w-2xl transform transition-all duration-300">
+            <h3 class="text-2xl font-bold mb-4 text-gray-800">Error de Configuración de la Base de Datos</h3>
+            <p class="text-gray-700 mb-4">
+                No se pudo conectar a la base de datos porque la configuración de Firebase es inválida o no existe.
+                Por favor, ve a la configuración de tu proyecto en la Consola de Firebase, copia el objeto JSON de `firebaseConfig` y pégalo aquí.
+            </p>
+            <textarea id="firebase-config-input" rows="6" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 mb-4" placeholder="Pega tu objeto de configuración de Firebase aquí..."></textarea>
+            <div class="flex justify-end">
+                <button id="save-config-btn" class="bg-amber-800 text-white py-2 px-4 rounded-lg font-bold hover:bg-amber-900 transition duration-300">Guardar y Recargar</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Modal for scheduling an event -->
     <div id="schedule-modal" class="form-container hidden">
@@ -242,7 +258,7 @@
 
         // Variables globales proporcionadas por el entorno del Canvas
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        let firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
         let db, auth, userId;
@@ -286,6 +302,7 @@
         const changeJustificationTextarea = document.getElementById('change-justification');
         const cancelJustificationBtn = document.getElementById('cancel-justification-btn');
         const confirmJustificationBtn = document.getElementById('confirm-justification-btn');
+        const loadingMessage = document.getElementById('loading-message');
 
         // Nuevos modales para edición y borrado de músicos
         const editMusicianModal = document.getElementById('edit-musician-modal');
@@ -297,6 +314,12 @@
         const musicianToDeleteName = document.getElementById('musician-to-delete-name');
         const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
         const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
+        
+        // Elementos del nuevo modal de configuración
+        const dbConfigModal = document.getElementById('db-config-modal');
+        const firebaseConfigInput = document.getElementById('firebase-config-input');
+        const saveConfigBtn = document.getElementById('save-config-btn');
+        
 
         /**
          * Muestra un modal de mensaje con el título y texto especificados.
@@ -320,11 +343,19 @@
         cancelJustificationBtn.addEventListener('click', () => justificationModal.classList.add('hidden'));
 
         /**
-         * Inicializar Firebase y autenticar al usuario
-         * Se ha refactorizado para usar onAuthStateChanged, lo que garantiza
-         * que Firebase esté completamente inicializado antes de interactuar con él.
+         * Inicializar Firebase y autenticar al usuario.
+         * Toda la lógica de la aplicación se ejecuta dentro del onAuthStateChanged
+         * para garantizar que Firebase esté completamente inicializado.
          */
-        async function initializeFirebase() {
+        async function initializeFirebaseAndApp() {
+            // Verificación de configuración de Firebase
+            if (!firebaseConfig || !firebaseConfig.projectId || !firebaseConfig.apiKey) {
+                console.error("Error: La configuración de Firebase está ausente o es inválida.");
+                loadingMessage.textContent = ''; // Limpiar el mensaje de carga
+                dbConfigModal.classList.remove('hidden'); // Mostrar el modal de configuración
+                return;
+            }
+
             try {
                 const app = initializeApp(firebaseConfig);
                 auth = getAuth(app);
@@ -334,6 +365,7 @@
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         userId = user.uid;
+                        console.log("Usuario autenticado con éxito:", userId);
                     } else {
                         // Iniciar sesión anónima si no hay usuario
                         if (initialAuthToken) {
@@ -343,11 +375,19 @@
                             const userCredential = await signInAnonymously(auth);
                             userId = userCredential.user.uid;
                         }
+                        console.log("Usuario anónimo autenticado con éxito:", userId);
                     }
 
-                    userIdDisplay.textContent = `ID de usuario: ${userId}`;
-                    userIdDisplay.classList.remove('hidden');
+                    if (userId) {
+                        userIdDisplay.textContent = `ID de usuario: ${userId}`;
+                        userIdDisplay.classList.remove('hidden');
+                    } else {
+                        userIdDisplay.textContent = 'ID de usuario: N/A';
+                    }
                     
+                    // Ocultar el mensaje de carga
+                    loadingMessage.classList.add('hidden');
+
                     // Iniciar la escucha de datos solo después de que la autenticación esté lista
                     listenToData();
                     // Renderizar el calendario inicial
@@ -355,7 +395,32 @@
                 });
 
             } catch (error) {
-                console.error("Error initializing Firebase or signing in: ", error);
+                console.error("Error al inicializar Firebase o al iniciar sesión: ", error);
+                loadingMessage.textContent = 'Error: Fallo al conectar con la base de datos. Por favor, recarga la página.';
+                dbConfigModal.classList.remove('hidden');
+            }
+        }
+        
+        // Manejador del botón para guardar la configuración
+        saveConfigBtn.addEventListener('click', () => {
+            try {
+                const newConfig = JSON.parse(firebaseConfigInput.value);
+                if (newConfig && newConfig.projectId && newConfig.apiKey) {
+                    localStorage.setItem('userFirebaseConfig', JSON.stringify(newConfig));
+                    window.location.reload();
+                } else {
+                    showMessageModal('Error', 'La configuración JSON no es válida. Por favor, asegúrate de que sea un objeto JSON correcto.');
+                }
+            } catch (error) {
+                showMessageModal('Error', 'El formato de configuración no es un JSON válido.');
+            }
+        });
+        
+        // Cargar la configuración de Firebase guardada en el almacenamiento local si existe
+        function loadConfig() {
+            const savedConfig = localStorage.getItem('userFirebaseConfig');
+            if (savedConfig) {
+                firebaseConfig = JSON.parse(savedConfig);
             }
         }
 
@@ -389,6 +454,11 @@
          * Escucha los cambios en las colecciones de Firestore en tiempo real.
          */
         function listenToData() {
+            if (!db || !userId) {
+                console.error("Error: Firebase o userId no están disponibles para escuchar datos.");
+                return;
+            }
+
             // Escuchar cambios en los músicos
             const musicianCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/musicians`);
             onSnapshot(musicianCollectionRef, (snapshot) => {
@@ -478,6 +548,14 @@
          * Renderiza el calendario completo para el mes seleccionado, sombreando los días especiales.
          */
         function renderCalendar() {
+            if (!calendarDaysGrid) return;
+            
+            // Eliminar el mensaje de carga si existe
+            const existingLoadingMessage = document.getElementById('loading-message');
+            if (existingLoadingMessage) {
+                existingLoadingMessage.classList.add('hidden');
+            }
+
             calendarDaysGrid.innerHTML = '';
             const year = selectedDate.getFullYear();
             const month = selectedDate.getMonth();
@@ -600,7 +678,7 @@
         scheduleForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            if (!db) {
+            if (!db || !userId) {
                 showMessageModal('Error', 'Firebase no está inicializado. Por favor, recarga la página.');
                 return;
             }
@@ -674,7 +752,7 @@
          * Guarda o actualiza la justificación de un evento desde el modal de detalles.
          */
         saveJustificationBtn.addEventListener('click', async () => {
-            if (!db || !editingEventId) {
+            if (!db || !userId || !editingEventId) {
                 showMessageModal('Error', 'Firebase no está inicializado o no hay evento seleccionado.');
                 return;
             }
@@ -696,7 +774,7 @@
          * Elimina un evento de Firestore.
          */
         deleteEventBtn.addEventListener('click', async () => {
-            if (!db || !editingEventId) {
+            if (!db || !userId || !editingEventId) {
                 showMessageModal('Error', 'Firebase no está inicializado o no hay evento seleccionado.');
                 return;
             }
@@ -778,7 +856,7 @@
                 return;
             }
 
-            if (!db) {
+            if (!db || !userId) {
                 showMessageModal('Error', 'Firebase no está inicializado. Por favor, recarga la página.');
                 return;
             }
@@ -798,7 +876,7 @@
          */
         musicianListUl.addEventListener('click', async (e) => {
             const target = e.target.closest('button');
-            if (!target || !db) {
+            if (!target || !db || !userId) {
                 showMessageModal('Error', 'Firebase no está inicializado o el elemento no es válido.');
                 return;
             }
@@ -821,7 +899,7 @@
 
         // Lógica para los nuevos modales de edición y borrado
         saveEditBtn.addEventListener('click', async () => {
-            if (!db || !musicianToEditId) return;
+            if (!db || !userId || !musicianToEditId) return;
 
             const newName = editMusicianNameInput.value.trim();
             if (newName === '') {
@@ -847,7 +925,7 @@
         });
 
         confirmDeleteBtn.addEventListener('click', async () => {
-            if (!db || !musicianToDeleteId) return;
+            if (!db || !userId || !musicianToDeleteId) return;
 
             const musicianCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/musicians`);
             try {
@@ -867,7 +945,10 @@
         });
 
         // Inicializar la aplicación al cargar la página.
-        window.addEventListener('load', initializeFirebase);
+        window.addEventListener('load', () => {
+            loadConfig(); // Intentar cargar la configuración guardada
+            initializeFirebaseAndApp();
+        });
     </script>
 </body>
 </html>
