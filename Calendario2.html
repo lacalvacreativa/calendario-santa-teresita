@@ -104,6 +104,32 @@
         </div>
     </div>
 
+    <!-- Modal para editar un músico -->
+    <div id="edit-musician-modal" class="form-container hidden">
+        <div class="modal bg-white p-6 rounded-xl shadow-2xl w-full max-w-lg transform transition-all duration-300 scale-95 md:scale-100">
+            <h3 class="text-2xl font-bold mb-4 text-gray-800">Editar Músico</h3>
+            <p class="text-gray-700 mb-4">Introduce el nuevo nombre del músico.</p>
+            <input type="text" id="edit-musician-name-input" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 mb-4" placeholder="Nuevo nombre del músico">
+            <div class="flex justify-end space-x-4">
+                <button type="button" id="cancel-edit-btn" class="bg-gray-500 text-white py-2 px-4 rounded-lg font-bold hover:bg-gray-600 transition duration-300">Cancelar</button>
+                <button type="button" id="save-edit-btn" class="bg-amber-800 text-white py-2 px-4 rounded-lg font-bold hover:bg-amber-900 transition duration-300">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para confirmar la eliminación de un músico -->
+    <div id="delete-musician-modal" class="form-container hidden">
+        <div class="modal bg-white p-6 rounded-xl shadow-2xl w-full max-w-lg transform transition-all duration-300 scale-95 md:scale-100">
+            <h3 class="text-2xl font-bold mb-4 text-gray-800">Confirmar Eliminación</h3>
+            <p class="text-gray-700 mb-4">¿Estás seguro de que deseas eliminar a <span id="musician-to-delete-name" class="font-bold"></span>?</p>
+            <div class="flex justify-end space-x-4">
+                <button type="button" id="cancel-delete-btn" class="bg-gray-500 text-white py-2 px-4 rounded-lg font-bold hover:bg-gray-600 transition duration-300">Cancelar</button>
+                <button type="button" id="confirm-delete-btn" class="bg-red-500 text-white py-2 px-4 rounded-lg font-bold hover:bg-red-600 transition duration-300">Eliminar</button>
+            </div>
+        </div>
+    </div>
+
+
     <!-- Main Content Area -->
     <main class="flex flex-1 flex-col md:flex-row p-4 md:space-x-4">
         
@@ -211,7 +237,7 @@
     <!-- JavaScript logic -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Variables globales proporcionadas por el entorno del Canvas
@@ -225,6 +251,8 @@
         let currentMusicians = [];
         let editingEventId = null;
         let originalMusicianId = null;
+        let musicianToEditId = null;
+        let musicianToDeleteId = null;
 
         // Referencias a elementos del DOM
         const calendarDaysGrid = document.getElementById('calendar-days-grid');
@@ -259,6 +287,17 @@
         const cancelJustificationBtn = document.getElementById('cancel-justification-btn');
         const confirmJustificationBtn = document.getElementById('confirm-justification-btn');
 
+        // Nuevos modales para edición y borrado de músicos
+        const editMusicianModal = document.getElementById('edit-musician-modal');
+        const editMusicianNameInput = document.getElementById('edit-musician-name-input');
+        const saveEditBtn = document.getElementById('save-edit-btn');
+        const cancelEditBtn = document.getElementById('cancel-edit-btn');
+        
+        const deleteMusicianModal = document.getElementById('delete-musician-modal');
+        const musicianToDeleteName = document.getElementById('musician-to-delete-name');
+        const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+        const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
+
         /**
          * Muestra un modal de mensaje con el título y texto especificados.
          * @param {string} title - El título del mensaje.
@@ -282,29 +321,38 @@
 
         /**
          * Inicializar Firebase y autenticar al usuario
+         * Se ha refactorizado para usar onAuthStateChanged, lo que garantiza
+         * que Firebase esté completamente inicializado antes de interactuar con él.
          */
         async function initializeFirebase() {
             try {
                 const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
                 auth = getAuth(app);
+                db = getFirestore(app);
+                
+                // Escuchar cambios en el estado de autenticación
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                    } else {
+                        // Iniciar sesión anónima si no hay usuario
+                        if (initialAuthToken) {
+                            const userCredential = await signInWithCustomToken(auth, initialAuthToken);
+                            userId = userCredential.user.uid;
+                        } else {
+                            const userCredential = await signInAnonymously(auth);
+                            userId = userCredential.user.uid;
+                        }
+                    }
 
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                    console.log('User signed in with custom token');
-                } else {
-                    await signInAnonymously(auth);
-                    console.log('User signed in anonymously');
-                }
-                
-                userId = auth.currentUser?.uid || crypto.randomUUID();
-                userIdDisplay.textContent = `ID de usuario: ${userId}`;
-                userIdDisplay.classList.remove('hidden');
-                
-                // Iniciar la escucha de datos
-                listenToData();
-                // Renderizar el calendario inicial
-                renderCalendar();
+                    userIdDisplay.textContent = `ID de usuario: ${userId}`;
+                    userIdDisplay.classList.remove('hidden');
+                    
+                    // Iniciar la escucha de datos solo después de que la autenticación esté lista
+                    listenToData();
+                    // Renderizar el calendario inicial
+                    renderCalendar();
+                });
 
             } catch (error) {
                 console.error("Error initializing Firebase or signing in: ", error);
@@ -626,7 +674,10 @@
          * Guarda o actualiza la justificación de un evento desde el modal de detalles.
          */
         saveJustificationBtn.addEventListener('click', async () => {
-            if (!db || !editingEventId) return;
+            if (!db || !editingEventId) {
+                showMessageModal('Error', 'Firebase no está inicializado o no hay evento seleccionado.');
+                return;
+            }
 
             const justification = eventJustificationTextarea.value;
             const eventsCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/events`);
@@ -645,7 +696,10 @@
          * Elimina un evento de Firestore.
          */
         deleteEventBtn.addEventListener('click', async () => {
-            if (!db || !editingEventId) return;
+            if (!db || !editingEventId) {
+                showMessageModal('Error', 'Firebase no está inicializado o no hay evento seleccionado.');
+                return;
+            }
             
             // Reemplazo de window.confirm con el modal de mensaje para evitar errores en el iframe.
             if (window.confirm('¿Estás seguro de que deseas eliminar este evento?')) {
@@ -744,34 +798,72 @@
          */
         musicianListUl.addEventListener('click', async (e) => {
             const target = e.target.closest('button');
-            if (!target || !db) return;
+            if (!target || !db) {
+                showMessageModal('Error', 'Firebase no está inicializado o el elemento no es válido.');
+                return;
+            }
 
             const musicianId = target.dataset.id;
             const musicianCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/musicians`);
             
             if (target.classList.contains('delete-musician-btn')) {
-                // Reemplazo de window.confirm con el modal de mensaje para evitar errores en el iframe.
-                if (window.confirm('¿Estás seguro de que deseas eliminar a este músico?')) {
-                    try {
-                        await deleteDoc(doc(musicianCollectionRef, musicianId));
-                        showMessageModal('Músico Eliminado', 'El músico ha sido eliminado con éxito.');
-                    } catch (error) {
-                        console.error("Error al eliminar músico: ", error);
-                        showMessageModal('Error', 'Ocurrió un error al eliminar al músico. Por favor, inténtalo de nuevo.');
-                    }
-                }
+                const musician = currentMusicians.find(m => m.id === musicianId);
+                musicianToDeleteId = musicianId;
+                musicianToDeleteName.textContent = musician.name;
+                deleteMusicianModal.classList.remove('hidden');
             } else if (target.classList.contains('edit-musician-btn')) {
-                const newName = window.prompt('Introduce el nuevo nombre del músico:');
-                if (newName && newName.trim() !== '') {
-                    try {
-                        await updateDoc(doc(musicianCollectionRef, musicianId), { name: newName });
-                        showMessageModal('Músico Actualizado', 'El nombre del músico ha sido actualizado.');
-                    } catch (error) {
-                        console.error("Error al editar músico: ", error);
-                        showMessageModal('Error', 'Ocurrió un error al editar al músico. Por favor, inténtalo de nuevo.');
-                    }
-                }
+                const musician = currentMusicians.find(m => m.id === musicianId);
+                musicianToEditId = musicianId;
+                editMusicianNameInput.value = musician.name;
+                editMusicianModal.classList.remove('hidden');
             }
+        });
+
+        // Lógica para los nuevos modales de edición y borrado
+        saveEditBtn.addEventListener('click', async () => {
+            if (!db || !musicianToEditId) return;
+
+            const newName = editMusicianNameInput.value.trim();
+            if (newName === '') {
+                showMessageModal('Error', 'El nombre del músico no puede estar vacío.');
+                return;
+            }
+
+            const musicianCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/musicians`);
+            try {
+                await updateDoc(doc(musicianCollectionRef, musicianToEditId), { name: newName });
+                showMessageModal('Músico Actualizado', 'El nombre del músico ha sido actualizado.');
+                editMusicianModal.classList.add('hidden');
+                musicianToEditId = null;
+            } catch (error) {
+                console.error("Error al editar músico: ", error);
+                showMessageModal('Error', 'Ocurrió un error al editar al músico. Por favor, inténtalo de nuevo.');
+            }
+        });
+
+        cancelEditBtn.addEventListener('click', () => {
+            editMusicianModal.classList.add('hidden');
+            musicianToEditId = null;
+        });
+
+        confirmDeleteBtn.addEventListener('click', async () => {
+            if (!db || !musicianToDeleteId) return;
+
+            const musicianCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/musicians`);
+            try {
+                await deleteDoc(doc(musicianCollectionRef, musicianToDeleteId));
+                showMessageModal('Músico Eliminado', 'El músico ha sido eliminado con éxito.');
+                deleteMusicianModal.classList.add('hidden');
+                musicianToDeleteId = null;
+            } catch (error) {
+                console.error("Error al eliminar músico: ", error);
+                showMessageModal('Error', 'Ocurrió un error al eliminar al músico. Por favor, inténtalo de nuevo.');
+            }
+        });
+
+        cancelDeleteBtn.addEventListener('click', () => {
+            deleteMusicianModal.classList.add('hidden');
+            musicianToDeleteId = null;
         });
 
         // Inicializar la aplicación al cargar la página.
