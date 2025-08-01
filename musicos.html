@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Programación de Músicos - Iglesia Santa Teresita - PARROQUIA EL CARMELO</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .container {
+            max-width: 1200px;
+        }
+        .sidebar {
+            width: 300px;
+            min-width: 300px;
+        }
+        .main-content {
+            flex: 1;
+        }
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 1px;
+            background-color: #e5e7eb;
+        }
+        .calendar-day {
+            min-height: 120px;
+            background-color: #ffffff;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .calendar-day:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+        }
+        .justify-btn {
+            display: none;
+        }
+        .event-card:hover .justify-btn {
+            display: block;
+        }
+        .form-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .modal {
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .logo-header {
+            max-width: 50px;
+            height: auto;
+            object-fit: contain;
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen">
+
+    <!-- Main Application Header -->
+    <header class="bg-amber-800 text-white p-4 shadow-lg sticky top-0 z-50">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-4">
+                <!-- URL de imagen de prueba para el logo. Reemplázala con la URL de tu logo -->
+                <img src="https://placehold.co/50x50/F17D23/FFFFFF?text=Logo" alt="Logo de la Iglesia" class="logo-header rounded-full mr-4 shadow-md">
+                <h1 class="text-xl md:text-2xl font-bold">Programación de Músicos - Iglesia Santa Teresita - PARROQUIA EL CARMELO</h1>
+            </div>
+            <span id="user-id-display" class="text-sm bg-amber-700 p-2 rounded-lg hidden md:block">ID de usuario: N/A</span>
+        </div>
+    </header>
+
+    <!-- Modal de mensaje -->
+    <div id="message-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[200]">
+        <div class="bg-white p-6 rounded-xl shadow-lg text-center max-w-sm w-full">
+            <h3 class="text-xl font-bold mb-4" id="message-title"></h3>
+            <p class="mb-4" id="message-text"></p>
+            <button class="bg-amber-800 text-white py-2 px-4 rounded-lg font-bold hover:bg-amber-900 transition duration-300" id="message-close-btn">Cerrar</button>
+        </div>
+    </div>
+    
+    <!-- Modal para justificación de cambios -->
+    <div id="justification-modal" class="form-container hidden">
+        <div class="modal bg-white p-6 rounded-xl shadow-2xl w-full max-w-lg transform transition-all duration-300 scale-95 md:scale-100">
+            <h3 class="text-2xl font-bold mb-4 text-gray-800">Justificación de Cambio</h3>
+            <p class="text-gray-700 mb-4">Por favor, explica el motivo del cambio de músico para este evento.</p>
+            <textarea id="change-justification" rows="4" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 mb-4" placeholder="Escribe aquí tu justificación..."></textarea>
+            <div class="flex justify-end space-x-4">
+                <button type="button" id="cancel-justification-btn" class="bg-gray-500 text-white py-2 px-4 rounded-lg font-bold hover:bg-gray-600 transition duration-300">Cancelar</button>
+                <button type="button" id="confirm-justification-btn" class="bg-amber-800 text-white py-2 px-4 rounded-lg font-bold hover:bg-amber-900 transition duration-300">Guardar Justificación</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para editar un músico -->
+    <div id="edit-musician-modal" class="form-container hidden">
+        <div class="modal bg-white p-6 rounded-xl shadow-2xl w-full max-w-lg transform transition-all duration-300 scale-95 md:scale-100">
+            <h3 class="text-2xl font-bold mb-4 text-gray-800">Editar Músico</h3>
+            <p class="text-gray-700 mb-4">Introduce el nuevo nombre del músico.</p>
+            <input type="text" id="edit-musician-name-input" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 mb-4" placeholder="Nuevo nombre del músico">
+            <div class="flex justify-end space-x-4">
+                <button type="button" id="cancel-edit-btn" class="bg-gray-500 text-white py-2 px-4 rounded-lg font-bold hover:bg-gray-600 transition duration-300">Cancelar</button>
+                <button type="button" id="save-edit-btn" class="bg-amber-800 text-white py-2 px-4 rounded-lg font-bold hover:bg-amber-900 transition duration-300">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para confirmar la eliminación de un músico -->
+    <div id="delete-musician-modal" class="form-container hidden">
+        <div class="modal bg-white p-6 rounded-xl shadow-2xl w-full max-w-lg transform transition-all duration-300 scale-95 md:scale-100">
+            <h3 class="text-2xl font-bold mb-4 text-gray-800">Confirmar Eliminación</h3>
+            <p class="text-gray-700 mb-4">¿Estás seguro de que deseas eliminar a <span id="musician-to-delete-name" class="font-bold"></span>?</p>
+            <div class="flex justify-end space-x-4">
+                <button type="button" id="cancel-delete-btn" class="bg-gray-500 text-white py-2 px-4 rounded-lg font-bold hover:bg-gray-600 transition duration-300">Cancelar</button>
+                <button type="button" id="confirm-delete-btn" class="bg-red-500 text-white py-2 px-4 rounded-lg font-bold hover:bg-red-600 transition duration-300">Eliminar</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Main Content Area -->
+    <main class="flex flex-1 flex-col md:flex-row p-4 md:space-x-4">
+        
+        <!-- Sidebar for Musician Management and Stats -->
+        <aside class="sidebar bg-white p-4 rounded-xl shadow-lg mb-4 md:mb-0 flex flex-col">
+            <h2 class="text-2xl font-bold mb-4 text-center text-gray-800">Músicos</h2>
+            <div class="flex items-center mb-4">
+                <input type="text" id="new-musician-name" placeholder="Nombre del nuevo músico" class="flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 mr-2">
+                <button id="add-musician-btn" class="bg-green-500 text-white p-2 rounded-lg font-bold hover:bg-green-600 transition duration-300">
+                    <i class="fas fa-plus"></i>
+                </button>
+            </div>
+            <ul id="musician-list" class="space-y-2 max-h-48 overflow-y-auto mb-6">
+                <!-- Musician items will be injected here -->
+            </ul>
+
+            <h2 class="text-2xl font-bold mb-4 text-center text-gray-800 border-t pt-4">Estadísticas de Programación</h2>
+            <ul id="musician-stats" class="space-y-2 max-h-48 overflow-y-auto">
+                <!-- Musician stats will be injected here -->
+            </ul>
+        </aside>
+
+        <!-- Main Calendar Section -->
+        <div class="main-content bg-white p-6 rounded-xl shadow-lg">
+            
+            <!-- Calendar Navigation -->
+            <div class="flex justify-between items-center mb-6">
+                <button id="prev-month" class="bg-gray-200 text-gray-700 p-3 rounded-full hover:bg-gray-300 transition duration-300">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <h2 id="current-month-year" class="text-3xl font-bold text-gray-800"></h2>
+                <button id="next-month" class="bg-gray-200 text-gray-700 p-3 rounded-full hover:bg-gray-300 transition duration-300">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+
+            <!-- Weekday Headers -->
+            <div class="calendar-grid text-center font-bold text-gray-600 mb-2">
+                <div class="p-2">Dom</div>
+                <div class="p-2">Lun</div>
+                <div class="p-2">Mar</div>
+                <div class="p-2">Mié</div>
+                <div class="p-2">Jue</div>
+                <div class="p-2">Vie</div>
+                <div class="p-2">Sáb</div>
+            </div>
+
+            <!-- Calendar Days Grid -->
+            <div id="calendar-days-grid" class="calendar-grid border-t border-l border-gray-300">
+                <!-- Calendar days will be injected here -->
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal for scheduling an event -->
+    <div id="schedule-modal" class="form-container hidden">
+        <div class="modal bg-white p-6 rounded-xl shadow-2xl w-full max-w-lg transform transition-all duration-300 scale-95 md:scale-100">
+            <h3 id="schedule-modal-title" class="text-2xl font-bold mb-4 text-gray-800">Programar Misa</h3>
+            <form id="schedule-form" class="space-y-4">
+                <div>
+                    <label for="event-time" class="block text-gray-700 font-bold mb-1">Hora de la misa:</label>
+                    <input type="time" id="event-time" required class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+                </div>
+                <div>
+                    <label for="assigned-musician" class="block text-gray-700 font-bold mb-1">Músico responsable:</label>
+                    <select id="assigned-musician" required class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        <option value="">Selecciona un músico</option>
+                    </select>
+                </div>
+                <div class="flex justify-end space-x-4">
+                    <button type="button" id="close-schedule-modal" class="bg-gray-500 text-white py-2 px-4 rounded-lg font-bold hover:bg-gray-600 transition duration-300">Cancelar</button>
+                    <button type="submit" class="bg-amber-800 text-white py-2 px-4 rounded-lg font-bold hover:bg-amber-900 transition duration-300">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal for event details and justification -->
+    <div id="event-details-modal" class="form-container hidden">
+        <div class="modal bg-white p-6 rounded-xl shadow-2xl w-full max-w-lg transform transition-all duration-300 scale-95 md:scale-100">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="event-details-modal-title" class="text-2xl font-bold text-gray-800">Detalles de la Misa</h3>
+                <button id="close-event-details-modal" class="text-gray-500 hover:text-gray-800 text-2xl"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="event-details-content" class="space-y-4">
+                <p><strong>Fecha:</strong> <span id="event-detail-date"></span></p>
+                <p><strong>Hora:</strong> <span id="event-detail-time"></span></p>
+                <p><strong>Músico asignado:</strong> <span id="event-detail-musician"></span></p>
+                
+                <div id="justification-section" class="bg-gray-100 p-4 rounded-lg">
+                    <p class="font-bold mb-2">Justificación de ausencia:</p>
+                    <textarea id="event-justification" rows="3" class="w-full p-2 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="Añade una justificación aquí..."></textarea>
+                    <button id="save-justification-btn" class="mt-2 bg-amber-800 text-white py-2 px-4 rounded-lg font-bold hover:bg-amber-900 transition duration-300">Guardar Justificación</button>
+                </div>
+            </div>
+            
+            <div class="mt-6 flex flex-col space-y-2">
+                <button id="reschedule-btn" class="bg-blue-500 text-white py-2 px-4 rounded-lg font-bold hover:bg-blue-600 transition duration-300">Re-programar</button>
+                <button id="google-calendar-btn" class="bg-gray-700 text-white py-2 px-4 rounded-lg font-bold hover:bg-gray-800 transition duration-300"><i class="fab fa-google"></i> Añadir a Google Calendar</button>
+                <button id="delete-event-btn" class="bg-red-500 text-white py-2 px-4 rounded-lg font-bold hover:bg-red-600 transition duration-300">Eliminar Evento</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript logic -->
+    <script type="module" defer>
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Variables globales proporcionadas por el entorno del Canvas
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let db, auth, userId;
+        let selectedDate = new Date();
+        let currentEvents = [];
+        let currentMusicians = [];
+        let editingEventId = null;
+        let originalMusicianId = null;
+        let musicianToEditId = null;
+        let musicianToDeleteId = null;
+
+        // Referencias a elementos del DOM
+        const calendarDaysGrid = document.getElementById('calendar-days-grid');
+        const currentMonthYear = document.getElementById('current-month-year');
+        const prevMonthBtn = document.getElementById('prev-month');
+        const nextMonthBtn = document.getElementById('next-month');
+        const newMusicianInput = document.getElementById('new-musician-name');
+        const addMusicianBtn = document.getElementById('add-musician-btn');
+        const musicianListUl = document.getElementById('musician-list');
+        const musicianStatsUl = document.getElementById('musician-stats');
+        const scheduleModal = document.getElementById('schedule-modal');
+        const closeScheduleModalBtn = document.getElementById('close-schedule-modal');
+        const scheduleForm = document.getElementById('schedule-form');
+        const assignedMusicianSelect = document.getElementById('assigned-musician');
+        const eventDetailsModal = document.getElementById('event-details-modal');
+        const closeEventDetailsModalBtn = document.getElementById('close-event-details-modal');
+        const eventDetailDateSpan = document.getElementById('event-detail-date');
+        const eventDetailTimeSpan = document.getElementById('event-detail-time');
+        const eventDetailMusicianSpan = document.getElementById('event-detail-musician');
+        const eventJustificationTextarea = document.getElementById('event-justification');
+        const saveJustificationBtn = document.getElementById('save-justification-btn');
+        const rescheduleBtn = document.getElementById('reschedule-btn');
+        const deleteEventBtn = document.getElementById('delete-event-btn');
+        const googleCalendarBtn = document.getElementById('google-calendar-btn');
+        const userIdDisplay = document.getElementById('user-id-display');
+        const messageModal = document.getElementById('message-modal');
+        const messageTitle = document.getElementById('message-title');
+        const messageText = document.getElementById('message-text');
+        const messageCloseBtn = document.getElementById('message-close-btn');
+        const justificationModal = document.getElementById('justification-modal');
+        const changeJustificationTextarea = document.getElementById('change-justification');
+        const cancelJustificationBtn = document.getElementById('cancel-justification-btn');
+        const confirmJustificationBtn = document.getElementById('confirm-justification-btn');
+
+        // Nuevos modales para edición y borrado de músicos
+        const editMusicianModal = document.getElementById('edit-musician-modal');
+        const editMusicianNameInput = document.getElementById('edit-musician-name-input');
+        const saveEditBtn = document.getElementById('save-edit-btn');
+        const cancelEditBtn = document.getElementById('cancel-edit-btn');
+        
+        const deleteMusicianModal = document.getElementById('delete-musician-modal');
+        const musicianToDeleteName = document.getElementById('musician-to-delete-name');
+        const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+        const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
+
+        /**
+         * Muestra un modal de mensaje con el título y texto especificados.
+         * @param {string} title - El título del mensaje.
+         * @param {string} text - El texto del mensaje.
+         */
+        function showMessageModal(title, text) {
+            messageTitle.textContent = title;
+            messageText.textContent = text;
+            messageModal.classList.remove('hidden');
+        }
+
+        /**
+         * Oculta el modal de mensaje.
+         */
+        function hideMessageModal() {
+            messageModal.classList.add('hidden');
+        }
+
+        messageCloseBtn.addEventListener('click', hideMessageModal);
+        cancelJustificationBtn.addEventListener('click', () => justificationModal.classList.add('hidden'));
+
+        /**
+         * Inicializar Firebase y autenticar al usuario
+         * Se ha refactorizado para usar onAuthStateChanged, lo que garantiza
+         * que Firebase esté completamente inicializado antes de interactuar con él.
+         */
+        async function initializeFirebase() {
+            try {
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                
+                // Escuchar cambios en el estado de autenticación
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                    } else {
+                        // Iniciar sesión anónima si no hay usuario
+                        if (initialAuthToken) {
+                            const userCredential = await signInWithCustomToken(auth, initialAuthToken);
+                            userId = userCredential.user.uid;
+                        } else {
+                            const userCredential = await signInAnonymously(auth);
+                            userId = userCredential.user.uid;
+                        }
+                    }
+
+                    userIdDisplay.textContent = `ID de usuario: ${userId}`;
+                    userIdDisplay.classList.remove('hidden');
+                    
+                    // Iniciar la escucha de datos solo después de que la autenticación esté lista
+                    listenToData();
+                    // Renderizar el calendario inicial
+                    renderCalendar();
+                });
+
+            } catch (error) {
+                console.error("Error initializing Firebase or signing in: ", error);
+            }
+        }
+
+        /**
+         * Crea un evento para Google Calendar.
+         * @param {object} event - El objeto del evento con fecha, hora, y músico.
+         * @returns {string} La URL para añadir el evento a Google Calendar.
+         */
+        function createGoogleCalendarUrl(event) {
+            const date = new Date(event.date);
+            const start = new Date(date.getFullYear(), date.getMonth(), date.getDate(), event.time.split(':')[0], event.time.split(':')[1]);
+            const end = new Date(start.getTime() + 60 * 60 * 1000); // 1 hora de duración
+
+            const formatDateTime = (d) => {
+                const pad = (n) => n < 10 ? '0' + n : n;
+                return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`;
+            };
+
+            const title = `Misa con música: ${event.musicianName}`;
+            const details = `Músico responsable: ${event.musicianName}`;
+
+            const url = new URL('https://www.google.com/calendar/render');
+            url.searchParams.append('action', 'TEMPLATE');
+            url.searchParams.append('text', title);
+            url.searchParams.append('details', details);
+            url.searchParams.append('dates', `${formatDateTime(start)}/${formatDateTime(end)}`);
+            return url.toString();
+        }
+
+        /**
+         * Escucha los cambios en las colecciones de Firestore en tiempo real.
+         */
+        function listenToData() {
+            // Escuchar cambios en los músicos
+            const musicianCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/musicians`);
+            onSnapshot(musicianCollectionRef, (snapshot) => {
+                currentMusicians = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderMusicianList();
+                updateMusicianSelect();
+                renderMusicianStats();
+            });
+
+            // Escuchar cambios en los eventos
+            const eventsCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/events`);
+            onSnapshot(eventsCollectionRef, (snapshot) => {
+                currentEvents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderCalendar();
+                renderMusicianStats();
+            });
+        }
+
+        /**
+         * Renderiza la lista de músicos en el panel lateral.
+         */
+        function renderMusicianList() {
+            musicianListUl.innerHTML = '';
+            currentMusicians.forEach(musician => {
+                const li = document.createElement('li');
+                li.className = "flex items-center justify-between p-2 bg-gray-50 rounded-lg border border-gray-200";
+                li.innerHTML = `
+                    <span class="text-gray-800">${musician.name}</span>
+                    <div>
+                        <button class="edit-musician-btn text-blue-500 hover:text-blue-700 mr-2" data-id="${musician.id}">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="delete-musician-btn text-red-500 hover:text-red-700" data-id="${musician.id}">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+                `;
+                musicianListUl.appendChild(li);
+            });
+        }
+
+        /**
+         * Renderiza las estadísticas de programación de músicos.
+         */
+        function renderMusicianStats() {
+            musicianStatsUl.innerHTML = '';
+            if (currentMusicians.length === 0 || currentEvents.length === 0) {
+                musicianStatsUl.innerHTML = '<p class="text-gray-500 text-center text-sm">No hay datos para mostrar.</p>';
+                return;
+            }
+
+            const stats = {};
+            currentEvents.forEach(event => {
+                stats[event.musicianId] = (stats[event.musicianId] || 0) + 1;
+            });
+
+            const sortedStats = currentMusicians.map(musician => ({
+                name: musician.name,
+                count: stats[musician.id] || 0
+            })).sort((a, b) => b.count - a.count);
+
+            sortedStats.forEach(stat => {
+                const li = document.createElement('li');
+                li.className = "flex justify-between items-center p-2 bg-gray-100 rounded-lg";
+                li.innerHTML = `
+                    <span class="text-gray-800">${stat.name}</span>
+                    <span class="bg-amber-100 text-amber-800 text-xs font-bold px-2 py-1 rounded-full">${stat.count}</span>
+                `;
+                musicianStatsUl.appendChild(li);
+            });
+        }
+
+        /**
+         * Rellena el menú desplegable de selección de músicos.
+         */
+        function updateMusicianSelect() {
+            assignedMusicianSelect.innerHTML = '<option value="">Selecciona un músico</option>';
+            currentMusicians.forEach(musician => {
+                const option = document.createElement('option');
+                option.value = musician.id;
+                option.textContent = musician.name;
+                assignedMusicianSelect.appendChild(option);
+            });
+        }
+
+        /**
+         * Renderiza el calendario completo para el mes seleccionado, sombreando los días especiales.
+         */
+        function renderCalendar() {
+            calendarDaysGrid.innerHTML = '';
+            const year = selectedDate.getFullYear();
+            const month = selectedDate.getMonth();
+            currentMonthYear.textContent = `${selectedDate.toLocaleString('es-ES', { month: 'long' })} ${year}`;
+
+            const firstDayOfMonth = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const today = new Date();
+
+            // Días del mes anterior para rellenar
+            const lastDayOfPrevMonth = new Date(year, month, 0).getDate();
+            for (let i = 0; i < firstDayOfMonth; i++) {
+                const dayDiv = document.createElement('div');
+                dayDiv.className = 'p-2 text-gray-400 text-right border-b border-r border-gray-300';
+                dayDiv.textContent = lastDayOfPrevMonth - firstDayOfMonth + i + 1;
+                calendarDaysGrid.appendChild(dayDiv);
+            }
+
+            // Días del mes actual
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dayDate = new Date(year, month, day);
+                const dayOfWeek = dayDate.getDay(); // 0 = Domingo, 1 = Lunes, ..., 6 = Sábado
+                
+                let dayColorClass = '';
+                if (dayOfWeek === 0) { // Domingo
+                    dayColorClass = 'bg-yellow-100';
+                } else if (dayOfWeek === 4) { // Jueves
+                    dayColorClass = 'bg-pink-100';
+                } else if (dayOfWeek === 6) { // Sábado
+                    dayColorClass = 'bg-green-100';
+                }
+
+                const dayDiv = document.createElement('div');
+                dayDiv.className = `calendar-day p-2 text-right border-b border-r border-gray-300 relative ${dayColorClass}`;
+                
+                const isToday = dayDate.getDate() === today.getDate() &&
+                                dayDate.getMonth() === today.getMonth() &&
+                                dayDate.getFullYear() === today.getFullYear();
+                
+                dayDiv.innerHTML = `
+                    <div class="flex flex-col items-end">
+                        <span class="text-sm font-bold ${isToday ? 'text-white bg-amber-800 rounded-full w-6 h-6 flex items-center justify-center' : 'text-gray-900'}">${day}</span>
+                    </div>
+                `;
+                dayDiv.dataset.date = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                dayDiv.addEventListener('click', (e) => {
+                    if (e.target.closest('.event-card')) {
+                        return; // Evitar abrir el modal de programación si se hace clic en un evento
+                    }
+                    openScheduleModal(dayDiv.dataset.date);
+                });
+
+                // Añadir eventos del día
+                const eventsForDay = currentEvents.filter(event => event.date === dayDiv.dataset.date);
+                if (eventsForDay.length > 0) {
+                    const eventsContainer = document.createElement('div');
+                    eventsContainer.className = 'mt-2 space-y-1';
+                    eventsForDay.forEach(event => {
+                        const musicianName = currentMusicians.find(m => m.id === event.musicianId)?.name || 'Músico no encontrado';
+                        const hasJustification = event.justification && event.justification.length > 0;
+                        const eventCard = document.createElement('div');
+                        eventCard.className = `event-card p-2 text-xs text-left rounded-lg shadow-md transition duration-300 cursor-pointer ${hasJustification ? 'bg-red-200 text-red-800' : 'bg-amber-100 text-amber-800'} hover:bg-amber-200`;
+                        eventCard.dataset.eventId = event.id;
+                        eventCard.innerHTML = `
+                            <p class="font-bold">${event.time}</p>
+                            <p>${musicianName}</p>
+                            ${hasJustification ? '<i class="fas fa-exclamation-triangle text-red-600 ml-1" title="Evento con justificación"></i>' : ''}
+                        `;
+                        eventsContainer.appendChild(eventCard);
+
+                        eventCard.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            openEventDetailsModal(event.id);
+                        });
+                    });
+                    dayDiv.appendChild(eventsContainer);
+                }
+                
+                calendarDaysGrid.appendChild(dayDiv);
+            }
+        }
+
+        /**
+         * Abre el modal para programar una nueva misa.
+         * @param {string} date - La fecha seleccionada en formato 'YYYY-MM-DD'.
+         * @param {string} eventId - Opcional, el ID del evento si se está re-programando.
+         */
+        function openScheduleModal(date, eventId = null) {
+            scheduleModal.classList.remove('hidden');
+            const [year, month, day] = date.split('-').map(Number);
+            document.getElementById('schedule-modal-title').textContent = `Programar Misa para el ${day}/${month}/${year}`;
+            scheduleForm.reset();
+            scheduleForm.dataset.date = date;
+            editingEventId = eventId;
+            originalMusicianId = eventId ? currentEvents.find(e => e.id === eventId)?.musicianId : null;
+        }
+
+        /**
+         * Abre el modal para ver los detalles de un evento.
+         * @param {string} eventId - El ID del evento a mostrar.
+         */
+        function openEventDetailsModal(eventId) {
+            const event = currentEvents.find(e => e.id === eventId);
+            if (!event) return;
+            
+            const musicianName = currentMusicians.find(m => m.id === event.musicianId)?.name || 'Músico no encontrado';
+
+            eventDetailDateSpan.textContent = event.date;
+            eventDetailTimeSpan.textContent = event.time;
+            eventDetailMusicianSpan.textContent = musicianName;
+            eventJustificationTextarea.value = event.justification || '';
+            editingEventId = event.id;
+
+            eventDetailsModal.classList.remove('hidden');
+        }
+
+        /**
+         * Guarda un nuevo evento o actualiza uno existente en Firestore.
+         */
+        scheduleForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            if (!db) {
+                showMessageModal('Error', 'Firebase no está inicializado. Por favor, recarga la página.');
+                return;
+            }
+
+            const date = scheduleForm.dataset.date;
+            const time = document.getElementById('event-time').value;
+            const musicianId = document.getElementById('assigned-musician').value;
+            const musicianName = assignedMusicianSelect.options[assignedMusicianSelect.selectedIndex].text;
+
+            const eventsCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/events`);
+            
+            // Lógica para justificar cambios en el músico
+            if (editingEventId && originalMusicianId !== musicianId) {
+                scheduleModal.classList.add('hidden');
+                justificationModal.classList.remove('hidden');
+
+                confirmJustificationBtn.onclick = async () => {
+                    const justification = changeJustificationTextarea.value || 'Sin justificación';
+                    const eventData = {
+                        date,
+                        time,
+                        musicianId,
+                        musicianName,
+                        justification,
+                        lastModified: new Date()
+                    };
+
+                    try {
+                        await updateDoc(doc(eventsCollectionRef, editingEventId), eventData);
+                        showMessageModal('Evento Actualizado', 'La programación de la misa ha sido actualizada. Se ha guardado la justificación.');
+                    } catch (error) {
+                        console.error("Error al guardar el evento: ", error);
+                        showMessageModal('Error', 'Ocurrió un error al guardar la programación. Por favor, inténtalo de nuevo.');
+                    }
+                    justificationModal.classList.add('hidden');
+                    editingEventId = null;
+                    originalMusicianId = null;
+                };
+
+                return; // Detener la ejecución para esperar la justificación
+            }
+
+            // Si no hay cambios o es un nuevo evento, guardar directamente
+            const eventData = {
+                date,
+                time,
+                musicianId,
+                musicianName,
+                justification: editingEventId ? currentEvents.find(e => e.id === editingEventId)?.justification || '' : '',
+                createdAt: new Date()
+            };
+            
+            try {
+                if (editingEventId) {
+                    await updateDoc(doc(eventsCollectionRef, editingEventId), eventData);
+                    showMessageModal('Evento Actualizado', 'La programación de la misa ha sido actualizada.');
+                } else {
+                    await addDoc(eventsCollectionRef, eventData);
+                    showMessageModal('Programación Guardada', 'La misa ha sido programada con éxito.');
+                }
+                scheduleModal.classList.add('hidden');
+                editingEventId = null;
+                originalMusicianId = null;
+            } catch (error) {
+                console.error("Error al guardar el evento: ", error);
+                showMessageModal('Error', 'Ocurrió un error al guardar la programación. Por favor, inténtalo de nuevo.');
+            }
+        });
+
+        /**
+         * Guarda o actualiza la justificación de un evento desde el modal de detalles.
+         */
+        saveJustificationBtn.addEventListener('click', async () => {
+            if (!db || !editingEventId) {
+                showMessageModal('Error', 'Firebase no está inicializado o no hay evento seleccionado.');
+                return;
+            }
+
+            const justification = eventJustificationTextarea.value;
+            const eventsCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/events`);
+
+            try {
+                await updateDoc(doc(eventsCollectionRef, editingEventId), { justification });
+                showMessageModal('Justificación Guardada', 'La justificación de ausencia ha sido guardada con éxito.');
+                eventDetailsModal.classList.add('hidden');
+            } catch (error) {
+                console.error("Error al guardar la justificación: ", error);
+                showMessageModal('Error', 'Ocurrió un error al guardar la justificación. Por favor, inténtalo de nuevo.');
+            }
+        });
+
+        /**
+         * Elimina un evento de Firestore.
+         */
+        deleteEventBtn.addEventListener('click', async () => {
+            if (!db || !editingEventId) {
+                showMessageModal('Error', 'Firebase no está inicializado o no hay evento seleccionado.');
+                return;
+            }
+            
+            // Reemplazo de window.confirm con el modal de mensaje para evitar errores en el iframe.
+            if (window.confirm('¿Estás seguro de que deseas eliminar este evento?')) {
+                const eventsCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/events`);
+                try {
+                    await deleteDoc(doc(eventsCollectionRef, editingEventId));
+                    showMessageModal('Evento Eliminado', 'La misa ha sido eliminada con éxito.');
+                    eventDetailsModal.classList.add('hidden');
+                } catch (error) {
+                    console.error("Error al eliminar el evento: ", error);
+                    showMessageModal('Error', 'Ocurrió un error al eliminar la misa. Por favor, inténtalo de nuevo.');
+                }
+            }
+        });
+
+        /**
+         * Re-programa un evento abriendo el modal de programación con los datos pre-rellenados.
+         */
+        rescheduleBtn.addEventListener('click', () => {
+            if (!editingEventId) return;
+            const event = currentEvents.find(e => e.id === editingEventId);
+            if (!event) return;
+
+            eventDetailsModal.classList.add('hidden');
+            openScheduleModal(event.date, event.id);
+            document.getElementById('event-time').value = event.time;
+            document.getElementById('assigned-musician').value = event.musicianId;
+        });
+
+        /**
+         * Abre una nueva pestaña para añadir el evento a Google Calendar.
+         */
+        googleCalendarBtn.addEventListener('click', () => {
+            if (!editingEventId) return;
+            const event = currentEvents.find(e => e.id === editingEventId);
+            if (!event) return;
+
+            const googleCalendarUrl = createGoogleCalendarUrl(event);
+            window.open(googleCalendarUrl, '_blank');
+        });
+
+        closeScheduleModalBtn.addEventListener('click', () => {
+            scheduleModal.classList.add('hidden');
+            editingEventId = null;
+            originalMusicianId = null;
+        });
+
+        closeEventDetailsModalBtn.addEventListener('click', () => {
+            eventDetailsModal.classList.add('hidden');
+            editingEventId = null;
+        });
+
+        /**
+         * Navega al mes anterior y renderiza el calendario.
+         */
+        prevMonthBtn.addEventListener('click', () => {
+            selectedDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth() - 1, 1);
+            renderCalendar();
+        });
+
+        /**
+         * Navega al mes siguiente y renderiza el calendario.
+         */
+        nextMonthBtn.addEventListener('click', () => {
+            selectedDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 1);
+            renderCalendar();
+        });
+
+        /**
+         * Añade un nuevo músico a la lista en Firestore.
+         */
+        addMusicianBtn.addEventListener('click', async () => {
+            const newMusicianName = newMusicianInput.value.trim();
+            if (newMusicianName === '') {
+                showMessageModal('Error', 'El nombre del músico no puede estar vacío.');
+                return;
+            }
+
+            if (!db) {
+                showMessageModal('Error', 'Firebase no está inicializado. Por favor, recarga la página.');
+                return;
+            }
+
+            try {
+                const musicianCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/musicians`);
+                await addDoc(musicianCollectionRef, { name: newMusicianName, createdAt: new Date() });
+                newMusicianInput.value = '';
+            } catch (error) {
+                console.error("Error al añadir músico: ", error);
+                showMessageModal('Error', 'Ocurrió un error al añadir al músico. Por favor, inténtalo de nuevo.');
+            }
+        });
+
+        /**
+         * Maneja los clics en los botones de editar y eliminar músico.
+         */
+        musicianListUl.addEventListener('click', async (e) => {
+            const target = e.target.closest('button');
+            if (!target || !db) {
+                showMessageModal('Error', 'Firebase no está inicializado o el elemento no es válido.');
+                return;
+            }
+
+            const musicianId = target.dataset.id;
+            const musicianCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/musicians`);
+            
+            if (target.classList.contains('delete-musician-btn')) {
+                const musician = currentMusicians.find(m => m.id === musicianId);
+                musicianToDeleteId = musicianId;
+                musicianToDeleteName.textContent = musician.name;
+                deleteMusicianModal.classList.remove('hidden');
+            } else if (target.classList.contains('edit-musician-btn')) {
+                const musician = currentMusicians.find(m => m.id === musicianId);
+                musicianToEditId = musicianId;
+                editMusicianNameInput.value = musician.name;
+                editMusicianModal.classList.remove('hidden');
+            }
+        });
+
+        // Lógica para los nuevos modales de edición y borrado
+        saveEditBtn.addEventListener('click', async () => {
+            if (!db || !musicianToEditId) return;
+
+            const newName = editMusicianNameInput.value.trim();
+            if (newName === '') {
+                showMessageModal('Error', 'El nombre del músico no puede estar vacío.');
+                return;
+            }
+
+            const musicianCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/musicians`);
+            try {
+                await updateDoc(doc(musicianCollectionRef, musicianToEditId), { name: newName });
+                showMessageModal('Músico Actualizado', 'El nombre del músico ha sido actualizado.');
+                editMusicianModal.classList.add('hidden');
+                musicianToEditId = null;
+            } catch (error) {
+                console.error("Error al editar músico: ", error);
+                showMessageModal('Error', 'Ocurrió un error al editar al músico. Por favor, inténtalo de nuevo.');
+            }
+        });
+
+        cancelEditBtn.addEventListener('click', () => {
+            editMusicianModal.classList.add('hidden');
+            musicianToEditId = null;
+        });
+
+        confirmDeleteBtn.addEventListener('click', async () => {
+            if (!db || !musicianToDeleteId) return;
+
+            const musicianCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/musicians`);
+            try {
+                await deleteDoc(doc(musicianCollectionRef, musicianToDeleteId));
+                showMessageModal('Músico Eliminado', 'El músico ha sido eliminado con éxito.');
+                deleteMusicianModal.classList.add('hidden');
+                musicianToDeleteId = null;
+            } catch (error) {
+                console.error("Error al eliminar músico: ", error);
+                showMessageModal('Error', 'Ocurrió un error al eliminar al músico. Por favor, inténtalo de nuevo.');
+            }
+        });
+
+        cancelDeleteBtn.addEventListener('click', () => {
+            deleteMusicianModal.classList.add('hidden');
+            musicianToDeleteId = null;
+        });
+
+        // Inicializar la aplicación al cargar la página.
+        window.addEventListener('load', initializeFirebase);
+    </script>
+</body>
+</html>
